@@ -52,11 +52,13 @@ router.post(
   passport.authenticate('jwt', { session: false }),
   async (req, res, next) => {
     try {
-      const hashtags = req.body.content.match(/#[^\s#]+/g);
       const post = await Post.create({
         content: req.body.content,
         UserId: req.user.id,
       });
+
+      const hashtags = req.body.content.match(/#[^\s#]+/g);
+
       if (hashtags) {
         const result = await Promise.all(
           hashtags.map((tag) =>
@@ -65,20 +67,11 @@ router.post(
             }),
           ),
         );
+
         await post.addHashtags(result.map((v) => v[0]));
       }
-      const data = await Post.findOne({
-        where: { id: post.id },
-        include: [
-          { model: Comment },
-          {
-            model: Image,
-          },
-          { model: User },
-        ],
-      });
 
-      res.status(201).json(data);
+      res.status(201).json({ PostId: post.id });
     } catch (error) {
       next(error);
     }
