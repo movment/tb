@@ -1,7 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
-const { Post, User } = require('../../models');
+const { Follow, Post, User } = require('../../models');
 
 const router = express.Router();
 
@@ -13,22 +13,44 @@ router.post('/', (req, res, next) => {
       if (err) return next(err);
       if (info) return res.status(401).send(info.reason);
 
-      const data = await User.findOne({
-        where: { id: user.id },
-        attributes: ['email', 'id', 'nickname'],
-        include: [
-          { model: Post },
-          { model: User, as: 'Followings' },
-          { model: User, as: 'Followers' },
-        ],
-      });
       const token = jwt.sign(
         { id: user.id, nickname: user.nickname },
         process.env.JWT_KEY,
         {
-          expiresIn: '1h',
+          expiresIn: '24h',
         },
       );
+
+      const userPromise = User.findOne({
+        where: { id: user.id },
+        attributes: ['email', 'id', 'nickname'],
+        raw: true,
+      });
+      const countPromise = Post.count({
+        where: {
+          UserId: user.id,
+        },
+      });
+      const followerPromise = Follow.count({
+        where: {
+          FollowingId: user.id,
+        },
+      });
+      const followingPromise = Follow.count({
+        where: {
+          FollowerId: user.id,
+        },
+      });
+
+      const [data, count, erCount, ingCout] = await Promise.all([
+        userPromise,
+        countPromise,
+        followerPromise,
+        followingPromise,
+      ]);
+      data.PostsCount = count;
+      data.FollowerCount = erCount;
+      data.FollowingCount = ingCout;
 
       return res.json({
         token,

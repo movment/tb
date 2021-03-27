@@ -1,6 +1,6 @@
 const express = require('express');
 const passport = require('passport');
-const { Post, User } = require('../../models');
+const { Follow, Post, User } = require('../../models');
 
 const router = express.Router();
 
@@ -12,15 +12,36 @@ router.get(
     return res.status(200).end();
   },
   async (req, res) => {
-    const user = await User.findOne({
+    const userPromise = User.findOne({
       where: { id: req.user.id },
       attributes: ['email', 'id', 'nickname'],
-      include: [
-        { model: Post },
-        { model: User, as: 'Followings' },
-        { model: User, as: 'Followers' },
-      ],
+      raw: true,
     });
+    const countPromise = Post.count({
+      where: {
+        UserId: req.user.id,
+      },
+    });
+    const followerPromise = Follow.count({
+      where: {
+        FollowingId: req.user.id,
+      },
+    });
+    const followingPromise = Follow.count({
+      where: {
+        FollowerId: req.user.id,
+      },
+    });
+
+    const [user, count, erCount, ingCout] = await Promise.all([
+      userPromise,
+      countPromise,
+      followerPromise,
+      followingPromise,
+    ]);
+    user.PostsCount = count;
+    user.FollowerCount = erCount;
+    user.FollowingCount = ingCout;
 
     res.json({ User: user });
   },
