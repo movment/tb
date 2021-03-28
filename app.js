@@ -3,10 +3,10 @@ const cors = require('cors');
 const express = require('express');
 const logger = require('morgan');
 const passport = require('passport');
+const path = require('path');
 const { sequelize } = require('./models');
 const passportConfig = require('./passport');
 const rootRouter = require('./routes');
-const path = require('path');
 
 const app = express();
 sequelize.sync().then(() => {
@@ -19,7 +19,7 @@ passportConfig();
 app.use(passport.initialize());
 app.use(
   cors({
-    origin: ['http://localhost:8000'],
+    origin: ['http://localhost:3000', 'http://localhost:5000'],
     credentials: true,
   }),
 );

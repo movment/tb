@@ -70,8 +70,14 @@ router.post(
 
         await post.addHashtags(result.map((v) => v[0]));
       }
-
-      res.status(201).json({ PostId: post.id });
+      const data = post.toJSON();
+      const imagesPaths = await Image.findAll({
+        where: { PostId: post.id },
+        attributes: ['src'],
+      });
+      data.User = req.user;
+      data.imagePaths = imagesPaths;
+      res.status(201).json({ post: data });
     } catch (error) {
       next(error);
     }
@@ -156,44 +162,44 @@ router.post(
   },
 );
 router.patch(
-  '/:PostId/like',
-
+  '/like',
   passport.authenticate('jwt', { session: false }),
   async (req, res, next) => {
     try {
       const post = await Post.findOne({
         where: {
-          id: req.params.PostId,
+          id: req.body.PostId,
         },
       });
       if (!post) return res.status(403).send('게시글이 존재하지 않습니다');
 
       await post.addLikers(req.user.id);
-      res.json({ PostId: post.id, UserId: req.user.id });
+      res.json({ PostId: post.id });
     } catch (error) {
       return next(error);
     }
   },
 );
 router.delete(
-  '/:PostId/unlike',
+  '/unlike',
   passport.authenticate('jwt', { session: false }),
   async (req, res, next) => {
     try {
       const post = await Post.findOne({
         where: {
-          id: req.params.PostId,
+          id: req.body.PostId,
         },
       });
       if (!post) return res.status(403).send('게시글이 존재하지 않습니다');
 
       await post.removeLikers(req.user.id);
-      res.json({ PostId: post.id, UserId: req.user.id });
+      res.json({ PostId: post.id });
     } catch (error) {
       return next(error);
     }
   },
 );
+
 router.delete(
   '/:PostId',
   passport.authenticate('jwt', { session: false }),
@@ -244,7 +250,7 @@ router.post(
   upload.array('image'),
   async (req, res, next) => {
     console.log(req.files);
-    res.json(req.files.map((file) => file.filename));
+    res.json({ imagePaths: req.files.map((file) => file.filename) });
   },
 );
 
