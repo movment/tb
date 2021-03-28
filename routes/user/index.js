@@ -4,42 +4,42 @@ const { User } = require('../../models');
 
 const router = express.Router();
 
-router.patch(
-  '/:UserId/follow',
+router.put(
+  '/follow',
   passport.authenticate('jwt', { session: false }),
   async (req, res, next) => {
     try {
       const user = await User.findOne({
         where: {
-          id: req.params.UserId,
+          id: req.body.UserId,
         },
       });
-      if (!user) {
-        return res.status(403).send('Check');
-      }
+      if (!user) return res.status(403).send('Check');
+
       await user.addFollowers(req.user.id);
-      res.status(200).json({ UserId: parseInt(req.params.UserId, 10) });
+      res.status(200).json({ UserId: req.body.UserId });
     } catch (error) {
       next(error);
     }
   },
 );
 
-router.delete(
-  '/:UserId/unfollow',
+router.patch(
+  '/unfollow',
   passport.authenticate('jwt', { session: false }),
   async (req, res, next) => {
     try {
       const user = await User.findOne({
         where: {
-          id: req.params.UserId,
+          id: req.body.UserId,
         },
       });
       if (!user) {
         return res.status(403).send('Check');
       }
+
       await user.removeFollowers(req.user.id);
-      res.status(200).json({ UserId: parseInt(req.params.UserId, 10) });
+      res.status(200).json({ UserId: req.body.UserId });
     } catch (error) {
       next(error);
     }

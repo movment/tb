@@ -70,13 +70,30 @@ router.post(
 
         await post.addHashtags(result.map((v) => v[0]));
       }
+      console.log(req.body.imagePaths);
+      if (req.body.imagePaths) {
+        if (Array.isArray(req.body.imagePaths)) {
+          const images = await Promise.all(
+            req.body.imagePaths.map((image) =>
+              Image.create({ src: image, PostId: post.id }),
+            ),
+          );
+        } else {
+          console.log(1);
+          const image = await Image.create({
+            src: req.body.imagePaths[0],
+            PostId: post.id,
+          });
+        }
+      }
       const data = post.toJSON();
-      const imagesPaths = await Image.findAll({
+      const imagePaths = await Image.findAll({
         where: { PostId: post.id },
         attributes: ['src'],
       });
+      console.log(imagePaths);
       data.User = req.user;
-      data.imagePaths = imagesPaths;
+      data.Images = imagePaths;
       res.status(201).json({ post: data });
     } catch (error) {
       next(error);

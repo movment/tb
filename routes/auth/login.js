@@ -23,7 +23,7 @@ router.post('/', (req, res, next) => {
 
       const userPromise = User.findOne({
         where: { id: user.id },
-        attributes: ['email', 'id', 'nickname'],
+        attributes: ['email', 'id', 'nickname', 'createdAt'],
         raw: true,
       });
       const countPromise = Post.count({
@@ -51,7 +51,7 @@ router.post('/', (req, res, next) => {
       data.PostsCount = count;
       data.FollowerCount = erCount;
       data.FollowingCount = ingCout;
-
+      res.cookie('token', token, { maxAge: 900000, httpOnly: true });
       return res.json({
         token,
         User: data,

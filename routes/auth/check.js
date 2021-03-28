@@ -14,7 +14,7 @@ router.get(
   async (req, res) => {
     const userPromise = User.findOne({
       where: { id: req.user.id },
-      attributes: ['email', 'id', 'nickname'],
+      attributes: ['email', 'id', 'nickname', 'createdAt'],
       raw: true,
     });
     const countPromise = Post.count({

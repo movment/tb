@@ -2,6 +2,7 @@ require('dotenv').config();
 const cors = require('cors');
 const express = require('express');
 const logger = require('morgan');
+const cookieParser = require('cookie-parser');
 const passport = require('passport');
 const path = require('path');
 const { sequelize } = require('./models');
@@ -17,9 +18,11 @@ sequelize.sync().then(() => {
 app.use(logger('dev'));
 passportConfig();
 app.use(passport.initialize());
+app.use(cookieParser());
+
 app.use(
   cors({
-    origin: ['http://localhost:3000', 'http://localhost:5000'],
+    origin: ['https://doinki.com'],
     credentials: true,
   }),
 );
