@@ -51,7 +51,10 @@ router.post('/', (req, res, next) => {
       data.PostsCount = count;
       data.FollowerCount = erCount;
       data.FollowingCount = ingCout;
-      res.cookie('token', token, { maxAge: 900000, httpOnly: true });
+      res.cookie('token', token, {
+        maxAge: 1000 * 60 * 60 * 48,
+        httpOnly: true,
+      });
       return res.json({
         token,
         User: data,

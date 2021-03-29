@@ -15,11 +15,15 @@ router.get(
         if (err) return next(err);
         if (info) return next();
 
-        const lastId = parseInt(req.query.lastId, 10);
+        const lastid = parseInt(req.query.lastid, 10);
+        const userid = parseInt(req.query.userid, 10);
         const where = {};
 
-        if (lastId) {
-          where.id = { [Op.lt]: lastId };
+        if (lastid) {
+          where.id = { [Op.lt]: lastid };
+        }
+        if (userid) {
+          where.UserId = userid;
         }
 
         const posts = await Post.findAll({
@@ -73,13 +77,16 @@ router.get(
     )(req, res, next);
   },
   async (req, res) => {
-    const lastId = parseInt(req.query.lastId, 10);
     const where = {};
+    const lastid = parseInt(req.query.lastid, 10);
+    const userid = parseInt(req.query.userid, 10);
 
-    if (lastId) {
-      where.id = { [Op.lt]: lastId };
+    if (lastid) {
+      where.id = { [Op.lt]: lastid };
     }
-
+    if (userid) {
+      where.UserId = userid;
+    }
     const posts = await Post.findAll({
       where,
       limit: 10,
@@ -94,42 +101,66 @@ router.get(
   },
 );
 
-// 쿠키 사용하면 필요없어질 듯
 router.get(
-  '/update',
+  '/my',
   passport.authenticate('jwt', { session: false }),
   async (req, res) => {
+    const lastId = parseInt(req.query.lastId, 10);
+    const where = { UserId: req.user.id };
+
+    if (lastId) {
+      where.id = { [Op.lt]: lastId };
+    }
+
     const posts = await Post.findAll({
+      where,
       limit: 10,
       order: [['createdAt', 'DESC']],
-      attributes: ['id', 'createdAt', 'UserId'],
       include: [
+        { model: Image },
         { model: User, attributes: ['id', 'nickname'] },
-        { model: User, as: 'Likers', where: { id: req.user.id } },
       ],
     });
-
-    const users = posts.reduce((acc, cur) => {
-      if (!acc[cur.UserId]) acc[cur.UserId] = cur.User;
-      return acc;
-    }, {});
-
-    const result = await Promise.all(
-      Object.keys(users).map((id) => {
-        return Follow.findOne({
-          where: {
-            FollowingId: id,
-            FollowerId: req.user.id,
-          },
-        });
-      }),
-    );
-    result.forEach((cur) => {
-      if (cur) users[cur.FollowingId].dataValues.isFollowing = true;
-    });
-
-    return res.json({ Likes: posts, users });
+    res.json({ Posts: posts });
   },
 );
+
+// 쿠키 사용하면 필요없어질 듯
+// router.get(
+//   '/update',
+//   passport.authenticate('jwt', { session: false }),
+//   async (req, res) => {
+//     const posts = await Post.findAll({
+//       limit: 10,
+//       order: [['createdAt', 'DESC']],
+//       attributes: ['id', 'createdAt', 'UserId'],
+//       include: [
+//         { model: User, attributes: ['id', 'nickname'] },
+//         { model: User, as: 'Likers', where: { id: req.user.id } },
+//       ],
+//     });
+
+//     const users = posts.reduce((acc, cur) => {
+//       if (!acc[cur.UserId]) acc[cur.UserId] = cur.User;
+//       return acc;
+//     }, {});
+
+//     const result = await Promise.all(
+//       Object.keys(users).map((id) => {
+//         return Follow.findOne({
+//           where: {
+//             FollowingId: id,
+//             FollowerId: req.user.id,
+//           },
+//         });
+//       }),
+//     );
+//     result.forEach((cur) => {
+//       if (cur) users[cur.FollowingId].dataValues.isFollowing = true;
+//     });
+
+//     return res.json({ Likes: posts, users });
+//   },
+// );
 
 module.exports = router;

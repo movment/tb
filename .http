@@ -1,4 +1,4 @@
-GET http://localhost:5000/api/user/followers HTTP/1.1
+GET http://localhost:5000/api/post/169/comments?page=2 HTTP/1.1
  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwibmlja25hbWUiOiJkb2lua2lhc2RzYXNhZiIsImlhdCI6MTYxNjY0MzQ4MCwiZXhwIjoxNjE2NjQ3MDgwfQ.710zsFIwrCzUlNoAR8ktnFAt5VSEdD5drDPjI2jjeWY
 
 ###

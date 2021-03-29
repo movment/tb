@@ -2,18 +2,27 @@ const express = require('express');
 const path = require('path');
 const passport = require('passport');
 const multer = require('multer');
+const { Op } = require('sequelize');
 
-const { Comment, Image, Post, User, Hashtag } = require('../../models');
+const {
+  Comment,
+  Image,
+  Post,
+  User,
+  Hashtag,
+  Sequelize,
+} = require('../../models');
 
 const router = express.Router();
 
-router.get('/:PostId', async (req, res, next) => {
+router.get('/:PostId', async (req, res) => {
   const { PostId } = req.params;
   const post = await Post.findOne({ where: { id: PostId } });
   if (!post) return res.status(404).send('존재하지 않는 게시글입니다');
 
   const fullPost = await Post.findOne({
     where: { id: PostId },
+
     include: [
       {
         model: Post,
@@ -31,15 +40,6 @@ router.get('/:PostId', async (req, res, next) => {
       },
       {
         model: Image,
-      },
-      {
-        model: Comment,
-        include: [
-          {
-            model: User,
-            attributes: ['id', 'nickname'],
-          },
-        ],
       },
     ],
   });
@@ -115,19 +115,47 @@ router.post(
       if (!post) return res.status(403).send('존재하지 않는 게시글입니다');
 
       const comment = await Comment.create({
-        content: req.body.content,
+        content: req.body.content || ' ',
         PostId: parseInt(req.params.PostId, 10),
         UserId: req.user.id,
       });
 
-      return res
-        .status(201)
-        .json({ Comment: comment.dataValues, User: req.user });
+      const fullComment = await Comment.findOne({
+        where: { id: comment.id },
+        include: [
+          {
+            model: User,
+            attributes: ['id', 'nickname'],
+          },
+        ],
+      });
+      return res.status(201).json(fullComment);
     } catch (error) {
       return next(error);
     }
   },
 );
+router.get('/:PostId/comments', async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const count = await Comment.count({ where: { PostId: req.params.PostId } });
+    console.log(req.params.PostId);
+    console.log(count, parseInt(count / 10, 10));
+    console.log(10 * (parseInt(count / 10, 10) - page + 1));
+    const comments = await Comment.findAll({
+      offset: 10 * (parseInt(count / 10, 10) - page + 1),
+      limit: 10,
+      where: {
+        PostId: req.params.PostId,
+      },
+      include: [{ model: User, attributes: ['id', 'nickname'] }],
+    });
+
+    return res.status(200).json({ comments, total: count });
+  } catch (error) {
+    return next(error);
+  }
+});
 router.post(
   '/:PostId/retweet',
   passport.authenticate('jwt', { session: false }),

@@ -1,8 +1,18 @@
 const express = require('express');
 const passport = require('passport');
-const { User } = require('../../models');
+const { Op } = require('sequelize');
+const { User, Post, Image } = require('../../models');
 
 const router = express.Router();
+
+router.get('/:id', async (req, res) => {
+  const user = await User.findOne({
+    where: { id: req.params.id },
+    attributes: ['createdAt', 'id', 'nickname'],
+  });
+
+  res.json({ User: user });
+});
 
 router.put(
   '/follow',

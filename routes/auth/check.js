@@ -14,7 +14,6 @@ router.get(
     });
     res.json({
       User: user,
-      isLoggedIn: true,
     });
   },
 );

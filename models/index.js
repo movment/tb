@@ -9,7 +9,7 @@ const sequelize = new Sequelize(
   config.password,
   config,
 );
-const db = { sequelize };
+const db = { sequelize, Sequelize };
 
 db.Like = require('./like')(sequelize);
 db.Follow = require('./follow')(sequelize);
