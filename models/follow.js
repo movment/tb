@@ -1,4 +1,4 @@
 module.exports = (sequelize) => {
-  const Follow = sequelize.define('Follow', {}, { timestamps: false });
+  const Follow = sequelize.define('Follows', {}, { timestamps: false });
   return Follow;
 };

@@ -10,14 +10,14 @@ router.post('/', (req, res, next) => {
     'local',
     { session: false },
     async (err, user, info) => {
-      if (err) return next(err);
+      if (err) return res.status(500).send('Server Error');
       if (info) return res.status(401).send(info.reason);
 
       const token = jwt.sign(
         { id: user.id, nickname: user.nickname },
         process.env.JWT_KEY,
         {
-          expiresIn: '24h',
+          expiresIn: '10d',
         },
       );
 

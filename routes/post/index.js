@@ -1,50 +1,73 @@
 const express = require('express');
 const path = require('path');
+const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const multer = require('multer');
-const { Op } = require('sequelize');
 
-const {
-  Comment,
-  Image,
-  Post,
-  User,
-  Hashtag,
-  Sequelize,
-} = require('../../models');
+const { Comment, Image, Post, User, Hashtag } = require('../../models');
 
 const router = express.Router();
 
 router.get('/:PostId', async (req, res) => {
   const { PostId } = req.params;
-  const post = await Post.findOne({ where: { id: PostId } });
-  if (!post) return res.status(404).send('존재하지 않는 게시글입니다');
+  const temp = await Post.findOne({ where: { id: PostId } });
 
-  const fullPost = await Post.findOne({
-    where: { id: PostId },
+  if (!temp) return res.status(404).send('존재하지 않는 게시글입니다');
 
-    include: [
-      {
-        model: Post,
-        as: 'Retweet',
+  try {
+    const user = jwt.verify(req.cookies.token, process.env.JWT_KEY);
+
+    const post = await Post.findOne({
+      where: { id: PostId },
+      include: [
+        { model: Image },
+        {
+          model: User,
+          attributes: ['id', 'nickname'],
+          include: [
+            {
+              model: User,
+              as: 'Followers',
+              required: false,
+              attributes: ['id'],
+              where: { id: user.id },
+            },
+          ],
+        },
+        {
+          model: User,
+          as: 'Likers',
+          attributes: ['id'],
+          where: {
+            id: user.id,
+          },
+          required: false,
+        },
+      ],
+    });
+
+    return res.json(post);
+  } catch (error) {
+    if (
+      error.name === 'JsonWebTokenError' ||
+      error.name === 'TokenExpiredError'
+    ) {
+      const post = await Post.findOne({
+        where: { id: PostId },
         include: [
+          { model: Image },
           {
             model: User,
             attributes: ['id', 'nickname'],
           },
         ],
-      },
-      {
-        model: User,
-        attributes: ['id', 'nickname'],
-      },
-      {
-        model: Image,
-      },
-    ],
-  });
+      });
 
-  res.status(200).json(fullPost);
+      return res.json(post);
+    }
+
+    res.status(500).send('Server Error');
+  }
 });
 
 router.post(
@@ -70,7 +93,6 @@ router.post(
 
         await post.addHashtags(result.map((v) => v[0]));
       }
-      console.log(req.body.imagePaths);
       if (req.body.imagePaths) {
         if (Array.isArray(req.body.imagePaths)) {
           const images = await Promise.all(
@@ -79,7 +101,6 @@ router.post(
             ),
           );
         } else {
-          console.log(1);
           const image = await Image.create({
             src: req.body.imagePaths[0],
             PostId: post.id,
@@ -91,7 +112,6 @@ router.post(
         where: { PostId: post.id },
         attributes: ['src'],
       });
-      console.log(imagePaths);
       data.User = req.user;
       data.Images = imagePaths;
       res.status(201).json({ post: data });
@@ -139,9 +159,6 @@ router.get('/:PostId/comments', async (req, res, next) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const count = await Comment.count({ where: { PostId: req.params.PostId } });
-    console.log(req.params.PostId);
-    console.log(count, parseInt(count / 10, 10));
-    console.log(10 * (parseInt(count / 10, 10) - page + 1));
     const comments = await Comment.findAll({
       offset: 10 * (parseInt(count / 10, 10) - page + 1),
       limit: 10,
@@ -206,58 +223,18 @@ router.post(
     }
   },
 );
-router.patch(
-  '/like',
-  passport.authenticate('jwt', { session: false }),
-  async (req, res, next) => {
-    try {
-      const post = await Post.findOne({
-        where: {
-          id: req.body.PostId,
-        },
-      });
-      if (!post) return res.status(403).send('게시글이 존재하지 않습니다');
-
-      await post.addLikers(req.user.id);
-      res.json({ PostId: post.id });
-    } catch (error) {
-      return next(error);
-    }
-  },
-);
-router.delete(
-  '/unlike',
-  passport.authenticate('jwt', { session: false }),
-  async (req, res, next) => {
-    try {
-      const post = await Post.findOne({
-        where: {
-          id: req.body.PostId,
-        },
-      });
-      if (!post) return res.status(403).send('게시글이 존재하지 않습니다');
-
-      await post.removeLikers(req.user.id);
-      res.json({ PostId: post.id });
-    } catch (error) {
-      return next(error);
-    }
-  },
-);
 
 router.delete(
   '/:PostId',
   passport.authenticate('jwt', { session: false }),
   async (req, res, next) => {
     try {
-      console.log(req.user.id);
       await Post.destroy({
         where: {
           id: req.params.PostId,
           UserId: req.user.id,
         },
       });
-      console.log(req.user.id);
       return res.json({ PostId: parseInt(req.params.PostId, 10) });
     } catch (error) {
       return next(error);
@@ -287,15 +264,59 @@ const upload = multer({
       done(null, basename + '_' + new Date().getTime() + ext);
     },
   }),
-  limits: { fileSize: 20 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 router.post(
   '/images',
   passport.authenticate('jwt', { session: false }),
   upload.array('image'),
   async (req, res, next) => {
-    console.log(req.files);
     res.json({ imagePaths: req.files.map((file) => file.filename) });
+  },
+);
+
+router.patch(
+  '/like',
+  passport.authenticate('jwt', { session: false }),
+  async (req, res) => {
+    try {
+      const post = await Post.findOne({
+        where: {
+          id: req.body.PostId,
+        },
+      });
+
+      if (!post) return res.status(403).send('게시글이 존재하지 않습니다');
+
+      await post.addLikers(req.user.id);
+
+      return res.json({ PostId: post.id });
+    } catch (error) {
+      console.error(error.message);
+      return res.status(500).send('Server Error');
+    }
+  },
+);
+router.patch(
+  '/unlike',
+  passport.authenticate('jwt', { session: false }),
+  async (req, res) => {
+    try {
+      const post = await Post.findOne({
+        where: {
+          id: req.body.PostId,
+        },
+      });
+
+      if (!post) return res.status(403).send('게시글이 존재하지 않습니다');
+
+      await post.removeLikers(req.user.id);
+
+      return res.json({ PostId: post.id });
+    } catch (error) {
+      console.error(error.message);
+      return res.status(500).send('Server Error');
+    }
   },
 );
 

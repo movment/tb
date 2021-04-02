@@ -4,7 +4,7 @@ const { User } = require('../../models');
 
 const router = express.Router();
 
-router.post('/', async (req, res, next) => {
+router.post('/', async (req, res) => {
   try {
     const user = await User.findOne({
       where: {
@@ -24,7 +24,8 @@ router.post('/', async (req, res, next) => {
 
     return res.send('OK');
   } catch (error) {
-    return next(error);
+    console.error(error.message);
+    return res.status(500).send('Server Error');
   }
 });
 

@@ -13,6 +13,7 @@ const db = { sequelize, Sequelize };
 
 db.Like = require('./like')(sequelize);
 db.Follow = require('./follow')(sequelize);
+db.PostHashtag = require('./posthashtag')(sequelize);
 db.Comment = require('./comment')(sequelize, DataTypes);
 db.User = require('./user')(sequelize, DataTypes);
 db.Post = require('./post')(sequelize, DataTypes);

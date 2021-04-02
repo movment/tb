@@ -1,166 +1,109 @@
 const express = require('express');
-const passport = require('passport');
+const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
-const { Image, Post, User, Follow, Like } = require('../../models');
+const { Image, Post, User, Follow, Like, Hashtag } = require('../../models');
 
 const router = express.Router();
 
-router.get(
-  '/',
-  (req, res, next) => {
-    passport.authenticate(
-      'jwt',
-      { session: false },
-      async (err, user, info) => {
-        if (err) return next(err);
-        if (info) return next();
+router.get('/', async (req, res) => {
+  const where = {};
+  const lastid = parseInt(req.query.lastid, 10);
+  const userid = parseInt(req.query.userid, 10);
+  const { search } = req.query;
 
-        const lastid = parseInt(req.query.lastid, 10);
-        const userid = parseInt(req.query.userid, 10);
-        const where = {};
+  if (lastid) {
+    where.id = { [Op.lt]: lastid };
+  }
+  if (userid) {
+    where.UserId = userid;
+  }
+  if (search) {
+    where.content = { [Op.like]: `%${search}%` };
+  }
 
-        if (lastid) {
-          where.id = { [Op.lt]: lastid };
-        }
-        if (userid) {
-          where.UserId = userid;
-        }
-
-        const posts = await Post.findAll({
-          where,
-          limit: 10,
-          order: [['createdAt', 'DESC']],
-          include: [
-            { model: Image },
-            { model: User, attributes: ['id', 'nickname'] },
-          ],
-        });
-
-        const likePosts = await Promise.all(
-          posts.map((post) => {
-            return Like.findOne({
-              where: {
-                PostId: post.id,
-                UserId: user.id,
-              },
-            });
-          }),
-        );
-
-        likePosts.forEach((like, index) => {
-          if (like) {
-            posts[index].dataValues.isLiked = true;
-          }
-        });
-
-        const users = posts.reduce((acc, cur) => {
-          if (!acc[cur.UserId]) acc[cur.UserId] = cur.User;
-          return acc;
-        }, {});
-
-        const result = await Promise.all(
-          Object.keys(users).map((id) => {
-            return Follow.findOne({
-              where: {
-                FollowingId: id,
-                FollowerId: user.id,
-              },
-            });
-          }),
-        );
-        result.forEach((cur) => {
-          if (cur) users[cur.FollowingId].dataValues.isFollowing = true;
-        });
-
-        return res.json({ Posts: posts, users });
+  try {
+    const user = jwt.verify(req.cookies.token, process.env.JWT_KEY);
+    const include = [
+      { model: Image },
+      {
+        model: User,
+        attributes: ['id', 'nickname'],
+        include: [
+          {
+            model: User,
+            as: 'Followers',
+            required: false,
+            where: { id: user.id },
+            attributes: ['id'],
+          },
+        ],
       },
-    )(req, res, next);
-  },
-  async (req, res) => {
-    const where = {};
-    const lastid = parseInt(req.query.lastid, 10);
-    const userid = parseInt(req.query.userid, 10);
-
-    if (lastid) {
-      where.id = { [Op.lt]: lastid };
-    }
-    if (userid) {
-      where.UserId = userid;
-    }
-    const posts = await Post.findAll({
-      where,
-      limit: 10,
-      order: [['createdAt', 'DESC']],
-      include: [
-        { model: Image },
-        { model: User, attributes: ['id', 'nickname'] },
-      ],
-    });
-
-    return res.json({ Posts: posts });
-  },
-);
-
-router.get(
-  '/my',
-  passport.authenticate('jwt', { session: false }),
-  async (req, res) => {
-    const lastId = parseInt(req.query.lastId, 10);
-    const where = { UserId: req.user.id };
-
-    if (lastId) {
-      where.id = { [Op.lt]: lastId };
-    }
+      {
+        model: User,
+        as: 'Likers',
+        attributes: ['id'],
+        where: {
+          id: user.id,
+        },
+        required: false,
+      },
+    ];
+    if (req.query.hashtag)
+      include.push({ model: Hashtag, where: { name: req.query.hashtag } });
 
     const posts = await Post.findAll({
       where,
       limit: 10,
       order: [['createdAt', 'DESC']],
-      include: [
-        { model: Image },
-        { model: User, attributes: ['id', 'nickname'] },
-      ],
+      include,
     });
-    res.json({ Posts: posts });
-  },
-);
 
-// 쿠키 사용하면 필요없어질 듯
-// router.get(
-//   '/update',
-//   passport.authenticate('jwt', { session: false }),
-//   async (req, res) => {
-//     const posts = await Post.findAll({
-//       limit: 10,
-//       order: [['createdAt', 'DESC']],
-//       attributes: ['id', 'createdAt', 'UserId'],
-//       include: [
-//         { model: User, attributes: ['id', 'nickname'] },
-//         { model: User, as: 'Likers', where: { id: req.user.id } },
-//       ],
-//     });
+    // 팔로잉
+    const users = posts.reduce((acc, cur) => {
+      if (!acc[cur.UserId]) acc[cur.UserId] = cur.User;
+      return acc;
+    }, {});
+    const result = await Promise.all(
+      Object.keys(users).map((id) => {
+        return Follow.findOne({
+          where: {
+            FollowingId: id,
+            FollowerId: user.id,
+          },
+        });
+      }),
+    );
+    result.forEach((cur) => {
+      if (cur) users[cur.FollowingId].dataValues.isFollowing = true;
+    });
 
-//     const users = posts.reduce((acc, cur) => {
-//       if (!acc[cur.UserId]) acc[cur.UserId] = cur.User;
-//       return acc;
-//     }, {});
+    return res.json({ Posts: posts, users });
+  } catch (error) {
+    if (
+      error.name === 'JsonWebTokenError' ||
+      error.name === 'TokenExpiredError'
+    ) {
+      const include = [
+        { model: Image },
+        {
+          model: User,
+          attributes: ['id', 'nickname'],
+        },
+      ];
+      if (req.query.hashtag)
+        include.push({ model: Hashtag, where: { name: req.query.hashtag } });
+      const posts = await Post.findAll({
+        where,
+        limit: 10,
+        order: [['createdAt', 'DESC']],
+        include,
+      });
+      // res.clearCookie('token');
+      return res.json({ Posts: posts });
+    }
 
-//     const result = await Promise.all(
-//       Object.keys(users).map((id) => {
-//         return Follow.findOne({
-//           where: {
-//             FollowingId: id,
-//             FollowerId: req.user.id,
-//           },
-//         });
-//       }),
-//     );
-//     result.forEach((cur) => {
-//       if (cur) users[cur.FollowingId].dataValues.isFollowing = true;
-//     });
-
-//     return res.json({ Likes: posts, users });
-//   },
-// );
+    res.status(500).send('Server Error');
+  }
+});
 
 module.exports = router;
