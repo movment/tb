@@ -5,6 +5,8 @@ const logger = require('morgan');
 const cookieParser = require('cookie-parser');
 const passport = require('passport');
 const path = require('path');
+const hpp = require('hpp');
+const helmet = require('helmet');
 const { sequelize } = require('./models');
 const passportConfig = require('./passport');
 const rootRouter = require('./routes');
@@ -14,8 +16,13 @@ sequelize.sync().then(() => {
   // eslint-disable-next-line no-console
   console.log('DB 연결');
 });
-
-app.use(logger('dev'));
+if (process.env.NODE_ENV === 'production') {
+  app.use(logger('combined'));
+  app.use(hpp());
+  app.use(helmet());
+} else {
+  app.use(logger('dev'));
+}
 passportConfig();
 app.use(passport.initialize());
 app.use(cookieParser());

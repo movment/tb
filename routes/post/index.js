@@ -3,6 +3,8 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const multer = require('multer');
+const multerS3 = require('multer-s3');
+const AWS = require('aws-sdk');
 
 const { Comment, Image, Post, User, Hashtag } = require('../../models');
 
@@ -227,7 +229,7 @@ router.post(
 router.delete(
   '/:PostId',
   passport.authenticate('jwt', { session: false }),
-  async (req, res, next) => {
+  async (req, res) => {
     try {
       await Post.destroy({
         where: {
@@ -237,7 +239,7 @@ router.delete(
       });
       return res.json({ PostId: parseInt(req.params.PostId, 10) });
     } catch (error) {
-      return next(error);
+      return res.status(500).send('Server Error');
     }
   },
 );
@@ -252,6 +254,11 @@ router.get('/', async (req, res) => {
   res.json(posts);
 });
 
+AWS.config.update({
+  accessKeyId: process.env.S3_ACCESS_KEY_ID,
+  secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+  region: 'ap-northeast-2',
+});
 const upload = multer({
   storage: multer.diskStorage({
     destination(req, file, done) {
@@ -264,8 +271,10 @@ const upload = multer({
       done(null, basename + '_' + new Date().getTime() + ext);
     },
   }),
+  // storage:multerS3()
   limits: { fileSize: 5 * 1024 * 1024 },
 });
+
 router.post(
   '/images',
   passport.authenticate('jwt', { session: false }),
