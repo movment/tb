@@ -1,10 +1,11 @@
+const axios = require('axios');
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const axios = require('axios');
-const { User, Post, Follow } = require('../../models');
+const { User } = require('../../models');
 
 const router = express.Router();
 
+// 테스트
 router.get('/', async (req, res) => {
   const kakaoToken = req.headers.authorization;
 
@@ -22,6 +23,7 @@ router.get('/', async (req, res) => {
       password: process.env.JWT_KEY,
     },
   });
+
   const token = jwt.sign(
     { id: user.id, nickname: user.nickname },
     process.env.JWT_KEY,
@@ -33,8 +35,10 @@ router.get('/', async (req, res) => {
   res.cookie('token', token, {
     maxAge: 1000 * 60 * 60 * 48,
     httpOnly: true,
+    secure: true,
   });
-  res.json({});
+
+  res.state(204).end();
 });
 
 module.exports = router;

@@ -1,28 +1,23 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
-const { Image, Post, User, Follow, Like, Hashtag } = require('../../models');
+const { Follow, Hashtag, Image, Post, User } = require('../../models');
 
 const router = express.Router();
 
 router.get('/', async (req, res) => {
-  const where = {};
+  const { search } = req.query;
   const lastid = parseInt(req.query.lastid, 10);
   const userid = parseInt(req.query.userid, 10);
-  const { search } = req.query;
+  const where = {};
 
-  if (lastid) {
-    where.id = { [Op.lt]: lastid };
-  }
-  if (userid) {
-    where.UserId = userid;
-  }
-  if (search) {
-    where.content = { [Op.like]: `%${search}%` };
-  }
+  if (lastid) where.id = { [Op.lt]: lastid };
+  if (userid) where.UserId = userid;
+  if (search) where.content = { [Op.like]: `%${search}%` };
 
   try {
     const user = jwt.verify(req.cookies.token, process.env.JWT_KEY);
+
     const include = [
       { model: Image },
       {
@@ -32,9 +27,9 @@ router.get('/', async (req, res) => {
           {
             model: User,
             as: 'Followers',
-            required: false,
             where: { id: user.id },
             attributes: ['id'],
+            required: false,
           },
         ],
       },
@@ -48,6 +43,7 @@ router.get('/', async (req, res) => {
         required: false,
       },
     ];
+
     if (req.query.hashtag)
       include.push({ model: Hashtag, where: { name: req.query.hashtag } });
 
@@ -58,7 +54,7 @@ router.get('/', async (req, res) => {
       include,
     });
 
-    // 팔로잉
+    // 팔로잉 수정
     const users = posts.reduce((acc, cur) => {
       if (!acc[cur.UserId]) acc[cur.UserId] = cur.User;
       return acc;
@@ -77,12 +73,9 @@ router.get('/', async (req, res) => {
       if (cur) users[cur.FollowingId].dataValues.isFollowing = true;
     });
 
-    return res.json({ Posts: posts, users });
+    res.json({ Posts: posts, users });
   } catch (error) {
-    if (
-      error.name === 'JsonWebTokenError' ||
-      error.name === 'TokenExpiredError'
-    ) {
+    if (error.name === 'JsonWebTokenError') {
       const include = [
         { model: Image },
         {
@@ -90,16 +83,24 @@ router.get('/', async (req, res) => {
           attributes: ['id', 'nickname'],
         },
       ];
+
       if (req.query.hashtag)
         include.push({ model: Hashtag, where: { name: req.query.hashtag } });
+
       const posts = await Post.findAll({
         where,
         limit: 10,
         order: [['createdAt', 'DESC']],
         include,
       });
-      // res.clearCookie('token');
-      return res.json({ Posts: posts });
+
+      res.json({ Posts: posts });
+      return;
+    }
+
+    if (error.name === 'TokenExpiredError') {
+      res.status(403).send('다시 로그인해주세요');
+      return;
     }
 
     res.status(500).send('Server Error');

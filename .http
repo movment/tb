@@ -1,2 +1,0 @@
-GET https://kapi.kakao.com/v2/user/me HTTP/1.1
-Authorization: Bearer eLUzomgz8_5G8uCilkILmuV65e1YEX3wSjaXoQopb9UAAAF4kMjxVQ

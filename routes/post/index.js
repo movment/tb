@@ -1,22 +1,22 @@
 const express = require('express');
-const path = require('path');
 const jwt = require('jsonwebtoken');
-const passport = require('passport');
 const multer = require('multer');
-const multerS3 = require('multer-s3');
-const AWS = require('aws-sdk');
-
-const { Comment, Image, Post, User, Hashtag } = require('../../models');
+const passport = require('passport');
+const path = require('path');
+const { Comment, Hashtag, Image, Post, User } = require('../../models');
+// const AWS = require('aws-sdk');
+// const multerS3 = require('multer-s3');
 
 const router = express.Router();
 
+// /api/post/1
 router.get('/:PostId', async (req, res) => {
   const { PostId } = req.params;
-  const temp = await Post.findOne({ where: { id: PostId } });
-
-  if (!temp) return res.status(404).send('존재하지 않는 게시글입니다');
 
   try {
+    const temp = await Post.findOne({ where: { id: PostId } });
+    if (!temp) return res.status(404).send('존재하지 않는 게시글입니다');
+
     const user = jwt.verify(req.cookies.token, process.env.JWT_KEY);
 
     const post = await Post.findOne({
@@ -48,12 +48,9 @@ router.get('/:PostId', async (req, res) => {
       ],
     });
 
-    return res.json(post);
+    res.json(post);
   } catch (error) {
-    if (
-      error.name === 'JsonWebTokenError' ||
-      error.name === 'TokenExpiredError'
-    ) {
+    if (error.name === 'JsonWebTokenError') {
       const post = await Post.findOne({
         where: { id: PostId },
         include: [
@@ -65,17 +62,25 @@ router.get('/:PostId', async (req, res) => {
         ],
       });
 
-      return res.json(post);
+      res.json(post);
+
+      return;
+    }
+    if (error.name === 'TokenExpiredError') {
+      res.status(403).send('다시 로그인해주세요');
+
+      return;
     }
 
     res.status(500).send('Server Error');
   }
 });
 
+// /api/post/
 router.post(
   '/',
   passport.authenticate('jwt', { session: false }),
-  async (req, res, next) => {
+  async (req, res) => {
     try {
       const post = await Post.create({
         content: req.body.content,
@@ -95,30 +100,34 @@ router.post(
 
         await post.addHashtags(result.map((v) => v[0]));
       }
+
       if (req.body.imagePaths) {
         if (Array.isArray(req.body.imagePaths)) {
-          const images = await Promise.all(
+          await Promise.all(
             req.body.imagePaths.map((image) =>
               Image.create({ src: image, PostId: post.id }),
             ),
           );
         } else {
-          const image = await Image.create({
+          await Image.create({
             src: req.body.imagePaths[0],
             PostId: post.id,
           });
         }
       }
-      const data = post.toJSON();
+
       const imagePaths = await Image.findAll({
         where: { PostId: post.id },
         attributes: ['src'],
       });
+
+      const data = post.toJSON();
       data.User = req.user;
       data.Images = imagePaths;
+
       res.status(201).json({ post: data });
     } catch (error) {
-      next(error);
+      res.status(500).send('Server Error');
     }
   },
 );
@@ -134,7 +143,10 @@ router.post(
         },
       });
 
-      if (!post) return res.status(403).send('존재하지 않는 게시글입니다');
+      if (!post) {
+        res.status(404).send('존재하지 않는 게시글입니다');
+        return;
+      }
 
       const comment = await Comment.create({
         content: req.body.content || ' ',
@@ -142,24 +154,30 @@ router.post(
         UserId: req.user.id,
       });
 
-      const fullComment = await Comment.findOne({
-        where: { id: comment.id },
-        include: [
-          {
-            model: User,
-            attributes: ['id', 'nickname'],
-          },
-        ],
-      });
-      return res.status(201).json(fullComment);
+      // const fullComment = await Comment.findOne({
+      //   where: { id: comment.id },
+      //   include: [
+      //     {
+      //       model: User,
+      //       attributes: ['id', 'nickname'],
+      //     },
+      //   ],
+      // });
+
+      const data = comment.toJSON();
+      data.User = req.user;
+
+      res.status(201).json(data);
     } catch (error) {
-      return next(error);
+      next(error);
     }
   },
 );
-router.get('/:PostId/comments', async (req, res, next) => {
+
+router.get('/:PostId/comments', async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
+
     const count = await Comment.count({ where: { PostId: req.params.PostId } });
     const comments = await Comment.findAll({
       offset: 10 * (parseInt(count / 10, 10) - page + 1),
@@ -170,11 +188,12 @@ router.get('/:PostId/comments', async (req, res, next) => {
       include: [{ model: User, attributes: ['id', 'nickname'] }],
     });
 
-    return res.status(200).json({ comments, total: count });
+    res.status(200).json({ comments, total: count });
   } catch (error) {
-    return next(error);
+    res.status(500).send('Server Error');
   }
 });
+
 router.post(
   '/:PostId/retweet',
   passport.authenticate('jwt', { session: false }),
@@ -237,28 +256,20 @@ router.delete(
           UserId: req.user.id,
         },
       });
-      return res.json({ PostId: parseInt(req.params.PostId, 10) });
+
+      res.json({ PostId: parseInt(req.params.PostId, 10) });
     } catch (error) {
-      return res.status(500).send('Server Error');
+      res.status(500).send('Server Error');
     }
   },
 );
-router.get('/', async (req, res) => {
-  const posts = await Post.findAll({
-    limit: 10,
-    offset: 0,
-    order: [['createdAt', 'DESC']],
-    include: [{ model: Image }, { model: Comment }, { model: User }],
-  });
 
-  res.json(posts);
-});
+// AWS.config.update({
+//   accessKeyId: process.env.S3_ACCESS_KEY_ID,
+//   secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+//   region: 'ap-northeast-2',
+// });
 
-AWS.config.update({
-  accessKeyId: process.env.S3_ACCESS_KEY_ID,
-  secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-  region: 'ap-northeast-2',
-});
 const upload = multer({
   storage: multer.diskStorage({
     destination(req, file, done) {
@@ -268,10 +279,16 @@ const upload = multer({
       const ext = path.extname(file.originalname);
       const basename = path.basename(file.originalname, ext);
 
-      done(null, basename + '_' + new Date().getTime() + ext);
+      done(null, `${basename}_${new Date().getTime()}${ext}`);
     },
   }),
-  // storage:multerS3()
+  // storage: multerS3({
+  //   s3: new AWS.S3(),
+  //   bucket: 'doinki',
+  //   key(req, file, cb) {
+  //     cb(null, `original/${Date.now()}_${path.basename(file.originalname)}`);
+  //   },
+  // }),
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
@@ -279,7 +296,7 @@ router.post(
   '/images',
   passport.authenticate('jwt', { session: false }),
   upload.array('image'),
-  async (req, res, next) => {
+  async (req, res) => {
     res.json({ imagePaths: req.files.map((file) => file.filename) });
   },
 );
@@ -295,17 +312,17 @@ router.patch(
         },
       });
 
-      if (!post) return res.status(403).send('게시글이 존재하지 않습니다');
+      if (!post) return res.status(404).send('게시글이 존재하지 않습니다');
 
       await post.addLikers(req.user.id);
 
-      return res.json({ PostId: post.id });
+      res.json({ PostId: post.id });
     } catch (error) {
-      console.error(error.message);
-      return res.status(500).send('Server Error');
+      res.status(500).send('Server Error');
     }
   },
 );
+
 router.patch(
   '/unlike',
   passport.authenticate('jwt', { session: false }),
@@ -317,14 +334,13 @@ router.patch(
         },
       });
 
-      if (!post) return res.status(403).send('게시글이 존재하지 않습니다');
+      if (!post) return res.status(404).send('게시글이 존재하지 않습니다');
 
       await post.removeLikers(req.user.id);
 
-      return res.json({ PostId: post.id });
+      res.json({ PostId: post.id });
     } catch (error) {
-      console.error(error.message);
-      return res.status(500).send('Server Error');
+      res.status(500).send('Server Error');
     }
   },
 );
