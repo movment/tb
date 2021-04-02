@@ -1,11 +1,10 @@
 const bcrypt = require('bcrypt');
 const express = require('express');
-const { isNotLoggedIn } = require('../../middlewares/auth');
 const { User } = require('../../models');
 
 const router = express.Router();
 
-router.post('/', isNotLoggedIn, async (req, res, next) => {
+router.post('/', async (req, res) => {
   try {
     const user = await User.findOne({
       where: {
@@ -13,7 +12,10 @@ router.post('/', isNotLoggedIn, async (req, res, next) => {
       },
     });
 
-    if (user) return res.status(403).send('이미 사용중인 아이디입니다');
+    if (user) {
+      res.status(403).send('이미 사용중인 아이디입니다');
+      return;
+    }
 
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
 
@@ -23,9 +25,9 @@ router.post('/', isNotLoggedIn, async (req, res, next) => {
       password: hashedPassword,
     });
 
-    return res.send('OK');
+    res.status(204).end();
   } catch (error) {
-    return next(error);
+    res.status(500).send('Server Error');
   }
 });
 

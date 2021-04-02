@@ -15,16 +15,21 @@ module.exports = () => {
             attributes: ['id', 'nickname', 'password'],
           });
 
-          if (!user) done(null, false, { reason: 'Check email' });
-          else {
-            const result = await bcrypt.compare(password, user.password);
-
-            if (result) done(null, user);
-            else
-              done(null, false, {
-                reason: 'Check password',
-              });
+          if (!user) {
+            done(null, false, { reason: 'Check email' });
+            return;
           }
+
+          const result = await bcrypt.compare(password, user.password);
+
+          if (result) {
+            done(null, user);
+            return;
+          }
+
+          done(null, false, {
+            reason: 'Check password',
+          });
         } catch (error) {
           done(error);
         }

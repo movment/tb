@@ -1,13 +1,15 @@
 const passport = require('passport');
-const { ExtractJwt, Strategy } = require('passport-jwt');
+const { Strategy } = require('passport-jwt');
 const { User } = require('../models');
+
+const cookieExtractor = (req) => req.cookies?.token;
 
 module.exports = () => {
   passport.use(
     'jwt',
     new Strategy(
       {
-        jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+        jwtFromRequest: cookieExtractor,
         secretOrKey: process.env.JWT_KEY,
       },
       async (jwt, done) => {
@@ -17,8 +19,12 @@ module.exports = () => {
             attributes: ['id', 'nickname'],
           });
 
-          if (user) done(null, user);
-          else done(null, false, { reason: 'Unauthorized' });
+          if (user) {
+            done(null, user);
+            return;
+          }
+
+          done(null, false, { reason: 'Unauthorized' });
         } catch (error) {
           done(error);
         }

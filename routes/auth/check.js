@@ -1,28 +1,26 @@
 const express = require('express');
 const passport = require('passport');
-const { Post, User } = require('../../models');
+const { User } = require('../../models');
 
 const router = express.Router();
 
+// Next.js에서 확인
 router.get(
   '/',
-  (req, res, next) => {
-    if (req.headers.authorization)
-      return passport.authenticate('jwt', { session: false })(req, res, next);
-    return res.status(200).end();
-  },
+  passport.authenticate('jwt', { session: false }),
   async (req, res) => {
-    const user = await User.findOne({
-      where: { id: req.user.id },
-      attributes: ['email', 'id', 'nickname'],
-      include: [
-        { model: Post },
-        { model: User, as: 'Followings' },
-        { model: User, as: 'Followers' },
-      ],
-    });
+    try {
+      const user = await User.findOne({
+        where: { id: req.user.id },
+        attributes: ['id', 'nickname'],
+      });
 
-    res.json({ User: user });
+      res.json({
+        User: user,
+      });
+    } catch (error) {
+      res.status(500).send('Server Error');
+    }
   },
 );
 
